@@ -4,47 +4,50 @@ from dateutil import parser as date_parser
 from pytz import timezone
 import os
 
-my_timezone = timezone('US/Pacific')
+PST = timezone('US/Pacific')
+
+COL_TIMESTAMP = 0
 
 
 def main(csv_file):
     f_in = open(csv_file, 'r')
     reader = csv.reader(f_in)
-    headers = next(reader, None)
 
-    column = {}
-    for h in headers:
-        column[h] = []
+    headers = next(reader, None)
+    rows = []
 
     for row in reader:
-        for h, v in zip(headers, row):
-            column[h].append(v)
-
-    utc_hdr = headers[0]
-    utc_col = column[utc_hdr]
-
-    pst_col = ['PST']
-
-    for utc in utc_col:
-        date = date_parser.parse(utc)
-        date = my_timezone.localize(date)
-        date = date.astimezone(my_timezone)
-        pst_col.append(date)
+        rows.append(row)
 
     x = os.path.splitext(csv_file)
-    csv_file_new = f'{x[0]}-PST{x[1]}'
+    csv_file_new = f'{x[0]}-SUMMARY{x[1]}'
     with open(csv_file_new, '+w', newline='') as f:
         writer = csv.writer(f)
-        f_in.seek(0)
-        i = 0
-        for row in reader:
-            if i == 0:
-                row[0] = pst_col[i]
-            else:
-                row[0] = pst_col[i].strftime('%Y-%m-%d %H:%M:%S')
-            writer.writerow(row)
-            i += 1
+        headers[0] = 'Month'
+        writer.writerow(headers)
 
+        month = None
+        sums = None
+
+        for row in rows:
+            date = date_parser.parse(row[COL_TIMESTAMP])
+            date = PST.localize(date)
+            pst = date.astimezone(PST)
+
+            if month is not None and pst.month != month:
+                # todo: print sums
+                writer.writerow(sums)
+                month = None
+
+            if month is None:
+                month = pst.month
+                sums = [0] * len(row)
+                sums[0] = month
+
+            for i in range(1, len(row)):
+                sums[i] += float(row[i])
+
+        writer.writerow(sums)
     print('done.')
 
 
